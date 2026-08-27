@@ -4,8 +4,8 @@ on:
   schedule:
     # 08:15 VN (TAT)
     - cron: '15 1 * * *'
-    # 11:00 VN (BAT)
-    - cron: '0 4 * * *'
+    # 11:15 VN (BAT)
+    - cron: '15 4 * * *'
   workflow_dispatch:
     inputs:
       action:
