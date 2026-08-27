@@ -7,10 +7,11 @@ on:
         description: 'Chế độ (enable/disable)'
         required: true
         default: 'enable'
-  schedule:
-    # 01:00 UTC = 08:00 Sáng VN (Lệnh TẮT)
+schedule:
+    # Mốc test lúc 17:14 chiều nay (10:14 UTC)
+    - cron: '14 10 * * *'
+    # 2 mốc chạy cố định hàng ngày
     - cron: '0 1 * * *'
-    # 04:24 UTC = 11:24 Trưa VN (Lệnh BẬT)
     - cron: '24 4 * * *'
 
 jobs:
