@@ -1,8 +1,9 @@
-const BASE_URL = (process.env.BASE_URL || 'https://vn.luxpowertek.com').trim().replace(/\/+$/, '');
+// Gán trực tiếp domain server LuxPower tại đây
+const BASE_URL = 'https://vn.luxpowertek.com';
 const ACCOUNT = process.env.LUX_ACCOUNT;
 const PASSWORD = process.env.LUX_PASSWORD;
 const INVERTER_SN = process.env.INVERTER_SN;
-const ACTION = process.argv[2]; // 'enable' hoặc 'disable'
+const ACTION = process.argv[2] || 'enable';
 
 let cookieJar = [];
 
