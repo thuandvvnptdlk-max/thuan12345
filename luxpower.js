@@ -31,7 +31,16 @@ function getCookieHeader() {
 }
 
 async function login() {
-  console.log('>>> 1. DANG NHAP TAI KHOAN LUXPOWER <<<');
+  console.log('--- 1. Khoi tao phien va lay Cookie ---');
+  const initRes = await fetch(`${BASE_URL}/WManage/web/login`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    },
+  });
+  parseAndSaveCookies(initRes);
+
+  console.log('--- 2. Dang nhap tai khoan ---');
   const form = new URLSearchParams();
   form.append('account', ACCOUNT);
   form.append('password', PASSWORD);
@@ -41,6 +50,10 @@ async function login() {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Origin': BASE_URL,
+      'Referer': `${BASE_URL}/WManage/web/login`,
+      'Cookie': getCookieHeader(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
     body: form.toString(),
@@ -49,44 +62,50 @@ async function login() {
   parseAndSaveCookies(res);
   const text = await res.text();
   console.log('Ket qua login:', text);
+
+  if (text.includes('405') || text.includes('<html>')) {
+    throw new Error('Dang nhap khong thanh cong, bi server tu choi.');
+  }
 }
 
 async function sendControl(enable) {
   await login();
 
   const isEnable = Boolean(enable);
-  console.log(`>>> 2. GUI LENH BIEN TAN: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} <<<`);
+  console.log(`--- 3. Gui lenh dieu khien: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} ---`);
 
-  const payload = {
-    inverterSn: INVERTER_SN,
-    functionParam: 'FUNC_TAKE_LOAD_TOGETHER',
-    enable: isEnable,
-    clientType: 'WEB',
-    remoteSetType: 'NORMAL'
-  };
+  const form = new URLSearchParams();
+  form.append('inverterSn', INVERTER_SN);
+  form.append('functionParam', 'FUNC_TAKE_LOAD_TOGETHER');
+  form.append('enable', isEnable ? 'true' : 'false');
+  form.append('clientType', 'WEB');
+  form.append('remoteSetType', 'NORMAL');
 
   const res = await fetch(`${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
       'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Origin': BASE_URL,
+      'Referer': `${BASE_URL}/WManage/web/maintain/workingMode/index`,
       'Cookie': getCookieHeader(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
-    body: JSON.stringify(payload),
+    body: form.toString(),
   });
 
+  parseAndSaveCookies(res);
   const text = await res.text();
-  console.log('Ket qua phan hoi tu Inverter:', text);
+  console.log('Ket qua tu bien tan:', text);
 }
 
 const isEnable = ACTION === 'enable';
 sendControl(isEnable)
   .then(() => {
-    console.log('>>> THUC THI HOAN TAT <<<');
+    console.log('Thuc hien lenh hoan tat!');
   })
   .catch((err) => {
-    console.error('Loi:', err);
+    console.error('Loi:', err.message || err);
     process.exit(1);
   });
