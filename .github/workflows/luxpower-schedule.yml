@@ -2,10 +2,12 @@ name: LuxPower Auto Schedule
 
 on:
   schedule:
-    # 12:15 VN (TAT)
-    - cron: '15 5 * * *'
-    # 13:31 VN (BAT)
-    - cron: '31 6 * * *'
+    # 08:00 Viet Nam = 01:00 UTC
+    - cron: '0 1 * * *'
+
+    # 11:24 Viet Nam = 04:24 UTC
+    - cron: '24 4 * * *'
+
   workflow_dispatch:
     inputs:
       action:
@@ -20,6 +22,8 @@ on:
 jobs:
   control:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,18 +38,42 @@ jobs:
           npm install axios axios-cookiejar-support tough-cookie
 
       - name: Determine Action
-        id: determine_action
         run: |
+          echo "======================================"
+          echo "LUXPOWER AUTO SCHEDULE"
+          echo "======================================"
+
+          echo "Event: ${{ github.event_name }}"
+          echo "Schedule: ${{ github.event.schedule }}"
+
+          VN_TIME=$(TZ='Asia/Ho_Chi_Minh' date '+%Y-%m-%d %H:%M:%S')
+          echo "Gio Viet Nam: $VN_TIME"
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
+            ACTION="${{ inputs.action }}"
+            echo "CHAY THU CONG"
+            echo "ACTION=$ACTION"
+
+          elif [ "${{ github.event.schedule }}" = "0 1 * * *" ]; then
+            ACTION="disable"
+            echo "CHAY TU DONG"
+            echo "08:00 VN -> DISABLE"
+
+          elif [ "${{ github.event.schedule }}" = "24 4 * * *" ]; then
+            ACTION="enable"
+            echo "CHAY TU DONG"
+            echo "11:24 VN -> ENABLE"
+
           else
-            HOUR=$(date -u +%H)
-            if [ "$HOUR" -eq 5 ]; then
-              echo "ACTION=disable" >> $GITHUB_ENV
-            else
-              echo "ACTION=enable" >> $GITHUB_ENV
-            fi
+            echo "ERROR: Khong xac dinh duoc ACTION"
+            exit 1
           fi
+
+          echo "======================================"
+          echo "ACTION CUOI: $ACTION"
+          echo "======================================"
+
+          echo "ACTION=$ACTION" >> "$GITHUB_ENV"
 
       - name: Run LuxPower Control
         env:
@@ -53,4 +81,9 @@ jobs:
           LUX_PASSWORD: ${{ secrets.LUX_PASSWORD }}
           INVERTER_SN: ${{ secrets.INVERTER_SN }}
         run: |
-          node luxpower.js $ACTION
+          echo "======================================"
+          echo "RUN LUXPOWER"
+          echo "ACTION=$ACTION"
+          echo "======================================"
+
+          node luxpower.js "$ACTION"
