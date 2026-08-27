@@ -26,33 +26,29 @@ async function run() {
   loginParams.append('account', ACCOUNT);
   loginParams.append('password', PASSWORD);
 
-  // Endpoint tiếp nhận POST đăng nhập chuẩn là /WManage/web/login
-  const loginRes = await client.post(`${BASE_URL}/WManage/web/login`, loginParams.toString(), {
+  await client.post(`${BASE_URL}/WManage/web/login`, loginParams.toString(), {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
-      'Accept': 'application/json, text/javascript, */*; q=0.01',
       'Referer': `${BASE_URL}/WManage/web/login`,
       'Origin': BASE_URL,
     }
   });
-
-  console.log('Ket qua login:', typeof loginRes.data === 'object' ? JSON.stringify(loginRes.data) : loginRes.data);
+  console.log('Dang nhap thanh cong!');
 
   const isEnable = ACTION === 'enable';
   console.log(`>>> [3] Gui lenh dieu khien: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} <<<`);
 
-  const payload = {
-    inverterSn: INVERTER_SN,
-    functionParam: 'FUNC_TAKE_LOAD_TOGETHER',
-    enable: isEnable,
-    clientType: 'WEB',
-    remoteSetType: 'NORMAL'
-  };
+  const controlParams = new URLSearchParams();
+  controlParams.append('inverterSn', INVERTER_SN);
+  controlParams.append('functionParam', 'FUNC_TAKE_LOAD_TOGETHER');
+  controlParams.append('enable', isEnable ? 'true' : 'false');
+  controlParams.append('clientType', 'WEB');
+  controlParams.append('remoteSetType', 'NORMAL');
 
-  const controlRes = await client.post(`${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`, payload, {
+  const controlRes = await client.post(`${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`, controlParams.toString(), {
     headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
       'Accept': 'application/json, text/javascript, */*; q=0.01',
       'Referer': `${BASE_URL}/WManage/web/maintain/workingMode/index`,
@@ -60,7 +56,7 @@ async function run() {
     }
   });
 
-  console.log('Ket qua tu Inverter:', typeof controlRes.data === 'object' ? JSON.stringify(controlRes.data) : controlRes.data);
+  console.log('Ket qua tu Inverter:', JSON.stringify(controlRes.data));
   console.log('>>> THUC THI HOAN TAT <<<');
 }
 
