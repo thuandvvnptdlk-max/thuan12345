@@ -1,7 +1,7 @@
 const BASE_URL = 'https://vn.luxpowertek.com';
 const ACCOUNT = process.env.LUX_ACCOUNT;
 const PASSWORD = process.env.LUX_PASSWORD;
-const INVERTER_SN = process.env.INVERTER_SN;
+const INVERTER_SN = process.env.INVERTER_SN || '60403U0700';
 const ACTION = process.argv[2] || 'enable';
 
 let cookies = {};
@@ -30,72 +30,63 @@ function getCookieHeader() {
     .join('; ');
 }
 
-async function performLogin() {
-  console.log('--- 1. Khoi tao phien ket noi ---');
-  const initRes = await fetch(`${BASE_URL}/WManage/web/login/login`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    },
-  });
-  parseAndSaveCookies(initRes);
-
-  console.log('--- 2. Dang nhap tai khoan ---');
+async function login() {
+  console.log('--- 1. Dang nhap tai khoan LuxPower ---');
   const form = new URLSearchParams();
   form.append('account', ACCOUNT);
   form.append('password', PASSWORD);
 
-  const loginRes = await fetch(`${BASE_URL}/WManage/web/login/login`, {
+  const res = await fetch(`${BASE_URL}/WManage/web/login/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
-      'Accept': 'application/json, text/javascript, */*; q=0.01',
-      'Origin': BASE_URL,
-      'Referer': `${BASE_URL}/WManage/web/login/login`,
-      'Cookie': getCookieHeader(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
     body: form.toString(),
   });
-  parseAndSaveCookies(loginRes);
 
-  const resText = await loginRes.text();
-  console.log('Ket qua login:', resText);
+  parseAndSaveCookies(res);
+  const text = await res.text();
+  console.log('Phan hoi dang nhap:', text);
 }
 
 async function sendControl(enable) {
-  await performLogin();
+  await login();
 
-  console.log(`--- 3. Gui lenh dieu khien: ${enable ? 'BAT' : 'TAT'} ---`);
+  const isEnable = Boolean(enable);
+  console.log(`--- 2. Gui lenh: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} ---`);
+
   const form = new URLSearchParams();
   form.append('inverterSn', INVERTER_SN);
-  form.append('functionParam', '1');
-  form.append('enable', enable ? 'true' : 'false');
+  form.append('functionParam', 'FUNC_TAKE_LOAD_TOGETHER');
+  form.append('enable', isEnable ? 'true' : 'false');
+  form.append('clientType', 'WEB');
+  form.append('remoteSetType', 'NORMAL');
 
-  const controlRes = await fetch(`${BASE_URL}/WManage/web/config/function/set`, {
+  const res = await fetch(`${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
       'Accept': 'application/json, text/javascript, */*; q=0.01',
-      'Origin': BASE_URL,
-      'Referer': `${BASE_URL}/WManage/web/config/function/index`,
       'Cookie': getCookieHeader(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
     body: form.toString(),
   });
 
-  const result = await controlRes.text();
-  console.log('Phan hoi tu LuxPower:', result);
+  parseAndSaveCookies(res);
+  const text = await res.text();
+  console.log('Ket qua tu bien tan:', text);
 }
 
 const isEnable = ACTION === 'enable';
 sendControl(isEnable)
   .then(() => {
-    console.log('Xong chuong trinh!');
+    console.log('Hoan thanh xu ly lenh!');
   })
   .catch((err) => {
-    console.error('Loi:', err);
+    console.error('Loi thuc thi:', err);
     process.exit(1);
   });
