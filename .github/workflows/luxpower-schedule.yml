@@ -2,12 +2,10 @@ name: LuxPower Auto Schedule
 
 on:
   schedule:
-    # 08:00 Viet Nam = 01:00 UTC
-    - cron: '0 1 * * *'
-
-    # 11:24 Viet Nam = 04:24 UTC
-    - cron: '24 4 * * *'
-
+    # 08:15 VN (TAT)
+    - cron: '15 1 * * *'
+    # 11:22 VN (BAT)
+    - cron: '22 4 * * *'
   workflow_dispatch:
     inputs:
       action:
@@ -22,8 +20,6 @@ on:
 jobs:
   control:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,31 +34,16 @@ jobs:
           npm install axios axios-cookiejar-support tough-cookie
 
       - name: Determine Action
+        id: determine_action
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ACTION=${{ inputs.action }}" >> "$GITHUB_ENV"
-            echo "Workflow thu cong"
-            echo "ACTION=${{ inputs.action }}"
+            echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
           else
-            # GitHub Actions cron dung UTC
-            # 01:00 UTC = 08:00 Viet Nam -> DISABLE
-            # 04:24 UTC = 11:24 Viet Nam -> ENABLE
-
-            CURRENT_CRON="${{ github.event.schedule }}"
-
-            echo "Cron hien tai: $CURRENT_CRON"
-
-            if [ "$CURRENT_CRON" = "0 1 * * *" ]; then
-              echo "ACTION=disable" >> "$GITHUB_ENV"
-              echo "ACTION=disable"
-              echo "Ly do: 08:00 Viet Nam"
-            elif [ "$CURRENT_CRON" = "24 4 * * *" ]; then
-              echo "ACTION=enable" >> "$GITHUB_ENV"
-              echo "ACTION=enable"
-              echo "Ly do: 11:24 Viet Nam"
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -eq 1 ]; then
+              echo "ACTION=disable" >> $GITHUB_ENV
             else
-              echo "Khong xac dinh duoc cron."
-              exit 1
+              echo "ACTION=enable" >> $GITHUB_ENV
             fi
           fi
 
@@ -72,11 +53,4 @@ jobs:
           LUX_PASSWORD: ${{ secrets.LUX_PASSWORD }}
           INVERTER_SN: ${{ secrets.INVERTER_SN }}
         run: |
-          echo "======================================"
-          echo "LUXPOWER AUTO CONTROL"
-          echo "======================================"
-          echo "ACTION=$ACTION"
-          echo "INVERTER_SN=$INVERTER_SN"
-          echo "======================================"
-
-          node luxpower.js "$ACTION"
+          node luxpower.js $ACTION
