@@ -18,15 +18,16 @@ const client = wrapper(axios.create({
 }));
 
 async function run() {
-  console.log('>>> [1] Khoi tao phien ket noi & Session Cookie <<<');
+  console.log('>>> [1] Khoi tao phien ket noi <<<');
   await client.get(`${BASE_URL}/WManage/web/login`);
 
-  console.log('>>> [2] Dang nhap vao tai khoan LuxPower <<<');
+  console.log('>>> [2] Dang nhap tai khoan LuxPower <<<');
   const loginParams = new URLSearchParams();
   loginParams.append('account', ACCOUNT);
   loginParams.append('password', PASSWORD);
 
-  const loginRes = await client.post(`${BASE_URL}/WManage/web/login/login`, loginParams.toString(), {
+  // Endpoint tiếp nhận POST đăng nhập chuẩn là /WManage/web/login
+  const loginRes = await client.post(`${BASE_URL}/WManage/web/login`, loginParams.toString(), {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
@@ -35,7 +36,8 @@ async function run() {
       'Origin': BASE_URL,
     }
   });
-  console.log('Ket qua login:', JSON.stringify(loginRes.data));
+
+  console.log('Ket qua login:', typeof loginRes.data === 'object' ? JSON.stringify(loginRes.data) : loginRes.data);
 
   const isEnable = ACTION === 'enable';
   console.log(`>>> [3] Gui lenh dieu khien: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} <<<`);
@@ -58,11 +60,11 @@ async function run() {
     }
   });
 
-  console.log('Ket qua tu Inverter:', JSON.stringify(controlRes.data));
+  console.log('Ket qua tu Inverter:', typeof controlRes.data === 'object' ? JSON.stringify(controlRes.data) : controlRes.data);
   console.log('>>> THUC THI HOAN TAT <<<');
 }
 
 run().catch((err) => {
-  console.error('Loi:', err.response ? JSON.stringify(err.response.data) : err.message);
+  console.error('Loi:', err.response ? (typeof err.response.data === 'object' ? JSON.stringify(err.response.data) : err.response.data) : err.message);
   process.exit(1);
 });
