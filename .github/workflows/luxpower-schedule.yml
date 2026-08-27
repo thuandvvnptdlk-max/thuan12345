@@ -2,8 +2,10 @@ name: LuxPower Auto Schedule
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
-
+    # 08:15 VN (TAT)
+    - cron: '15 1 * * *'
+    # 11:26 VN (BAT)
+    - cron: '26 4 * * *'
   workflow_dispatch:
     inputs:
       action:
@@ -18,8 +20,6 @@ on:
 jobs:
   control:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -34,46 +34,18 @@ jobs:
           npm install axios axios-cookiejar-support tough-cookie
 
       - name: Determine Action
+        id: determine_action
         run: |
-          echo "======================================"
-          echo "EVENT: ${{ github.event_name }}"
-          echo "SCHEDULE: ${{ github.event.schedule }}"
-          echo "======================================"
-
-          VN_TIME=$(TZ='Asia/Ho_Chi_Minh' date '+%Y-%m-%d %H:%M:%S')
-
-          echo "Gio Viet Nam: $VN_TIME"
-
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-
-            ACTION="${{ inputs.action }}"
-
-            echo "Chay thu cong"
-            echo "ACTION=$ACTION"
-
+            echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
           else
-
-            CURRENT_HOUR=$(TZ='Asia/Ho_Chi_Minh' date '+%H')
-            CURRENT_MINUTE=$(TZ='Asia/Ho_Chi_Minh' date '+%M')
-
-            echo "Gio VN: $CURRENT_HOUR:$CURRENT_MINUTE"
-
-            # TEST:
-            # Truoc 10:00 -> disable
-            # Tu 10:00 tro di -> enable
-
-            if [ "$CURRENT_HOUR" -lt 10 ]; then
-              ACTION="disable"
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -eq 1 ]; then
+              echo "ACTION=disable" >> $GITHUB_ENV
             else
-              ACTION="enable"
+              echo "ACTION=enable" >> $GITHUB_ENV
             fi
-
-            echo "Chay tu dong"
-            echo "ACTION=$ACTION"
-
           fi
-
-          echo "ACTION=$ACTION" >> "$GITHUB_ENV"
 
       - name: Run LuxPower Control
         env:
@@ -81,10 +53,4 @@ jobs:
           LUX_PASSWORD: ${{ secrets.LUX_PASSWORD }}
           INVERTER_SN: ${{ secrets.INVERTER_SN }}
         run: |
-          echo "======================================"
-          echo "LUXPOWER CONTROL"
-          echo "ACTION=$ACTION"
-          echo "INVERTER_SN=$INVERTER_SN"
-          echo "======================================"
-
-          node luxpower.js "$ACTION"
+          node luxpower.js $ACTION
