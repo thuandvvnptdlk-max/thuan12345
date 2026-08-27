@@ -1,15 +1,15 @@
-const BASE_URL = "https://vn.luxpowertek.com";
+const BASE_URL = 'https://vn.luxpowertek.com';
 const ACCOUNT = process.env.LUX_ACCOUNT;
 const PASSWORD = process.env.LUX_PASSWORD;
 const INVERTER_SN = process.env.INVERTER_SN;
-const ACTION = process.argv[2] || "enable";
+const ACTION = process.argv[2] || 'enable';
 
 let cookieJar = [];
 
 function saveCookies(response) {
-  const setCookie = response.headers.get("set-cookie");
+  const setCookie = response.headers.get('set-cookie');
   if (setCookie) {
-    const parts = setCookie.split(";")[0].split("=");
+    const parts = setCookie.split(';')[0].split('=');
     if (parts.length === 2) {
       cookieJar.push(`${parts[0].trim()}=${parts[1].trim()}`);
     }
@@ -17,74 +17,74 @@ function saveCookies(response) {
 }
 
 function getCookieHeader() {
-  return cookieJar.join("; ");
+  return cookieJar.join('; ');
 }
 
 async function performLogin() {
-  console.log("--- 1. Khoi tao phien ket noi ---");
-  const initUrl = new URL("/WManage/web/login/login", BASE_URL).toString();
+  console.log('--- 1. Dang ket noi LuxPower ---');
+  const initUrl = `${BASE_URL}/WManage/web/login/login`;
   
   const initRes = await fetch(initUrl, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
   });
   saveCookies(initRes);
 
-  console.log("--- 2. Dang nhap he thong LuxPower ---");
+  console.log('--- 2. Gui thong tin dang nhap ---');
   const form = new URLSearchParams();
-  form.append("account", ACCOUNT);
-  form.append("password", PASSWORD);
+  form.append('account', ACCOUNT);
+  form.append('password', PASSWORD);
 
   const loginRes = await fetch(initUrl, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-Requested-With": "XMLHttpRequest",
-      "Origin": BASE_URL,
-      "Referer": initUrl,
-      "Cookie": getCookieHeader(),
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Origin': BASE_URL,
+      'Referer': initUrl,
+      'Cookie': getCookieHeader(),
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
     body: form.toString(),
   });
   saveCookies(loginRes);
 
   const resText = await loginRes.text();
-  console.log("Ket qua dang nhap:", resText);
+  console.log('Ket qua dang nhap:', resText);
 }
 
 async function sendControl(enable) {
   await performLogin();
 
-  console.log(`--- 3. Gui lenh dieu khien: ${enable ? "BAT" : "TAT"} ---`);
+  console.log(`--- 3. Gui lenh dieu khien: ${enable ? 'BAT' : 'TAT'} ---`);
   const form = new URLSearchParams();
-  form.append("inverterSn", INVERTER_SN);
-  form.append("functionParam", "1");
-  form.append("enable", enable ? "true" : "false");
+  form.append('inverterSn', INVERTER_SN);
+  form.append('functionParam', '1');
+  form.append('enable', enable ? 'true' : 'false');
 
-  const controlUrl = new URL("/WManage/web/config/function/set", BASE_URL).toString();
+  const controlUrl = `${BASE_URL}/WManage/web/config/function/set`;
   const controlRes = await fetch(controlUrl, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "X-Requested-With": "XMLHttpRequest",
-      "Cookie": getCookieHeader(),
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Cookie': getCookieHeader(),
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
     body: form.toString(),
   });
 
   const result = await controlRes.text();
-  console.log("Phan hoi tu LuxPower:", result);
+  console.log('Phan hoi tu LuxPower:', result);
 }
 
-const isEnable = ACTION === "enable";
+const isEnable = ACTION === 'enable';
 sendControl(isEnable)
   .then(() => {
-    console.log("Thuc hien thanh cong!");
+    console.log('Thuc hien thanh cong!');
   })
   .catch((err) => {
-    console.error("Loi thuc thi:", err);
+    console.error('Loi thuc thi:', err);
     process.exit(1);
   });
