@@ -1,4 +1,4 @@
-const BASE_URL = process.env.BASE_URL;
+const BASE_URL = (process.env.BASE_URL || 'https://vn.luxpowertek.com').trim().replace(/\/+$/, '');
 const ACCOUNT = process.env.LUX_ACCOUNT;
 const PASSWORD = process.env.LUX_PASSWORD;
 const INVERTER_SN = process.env.INVERTER_SN;
