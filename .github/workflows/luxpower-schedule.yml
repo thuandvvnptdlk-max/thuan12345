@@ -2,9 +2,7 @@ name: LuxPower Auto Schedule
 
 on:
   schedule:
-    # 01:00 UTC = 08:00 AM VN (TẮT)
     - cron: '0 1 * * *'
-    # 04:24 UTC = 11:24 AM VN (BẬT)
     - cron: '24 4 * * *'
   workflow_dispatch:
     inputs:
