@@ -31,8 +31,9 @@ function getCookieHeader() {
 }
 
 async function login() {
-  console.log('--- 1. Khoi tao phien va lay Cookie ---');
+  console.log('--- 1. Khoi tao phien ket noi va lay JSESSIONID ---');
   const initRes = await fetch(`${BASE_URL}/WManage/web/login`, {
+    method: 'GET',
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -40,12 +41,12 @@ async function login() {
   });
   parseAndSaveCookies(initRes);
 
-  console.log('--- 2. Dang nhap tai khoan ---');
+  console.log('--- 2. Gui yeu cau xac thuc dang nhap ---');
   const form = new URLSearchParams();
   form.append('account', ACCOUNT);
   form.append('password', PASSWORD);
 
-  const res = await fetch(`${BASE_URL}/WManage/web/login/login`, {
+  let loginRes = await fetch(`${BASE_URL}/WManage/web/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
@@ -59,13 +60,27 @@ async function login() {
     body: form.toString(),
   });
 
-  parseAndSaveCookies(res);
-  const text = await res.text();
-  console.log('Ket qua login:', text);
+  let resText = await loginRes.text();
 
-  if (text.includes('405') || text.includes('<html>')) {
-    throw new Error('Dang nhap khong thanh cong, bi server tu choi.');
+  if (loginRes.status === 405 || resText.includes('405')) {
+    loginRes = await fetch(`${BASE_URL}/WManage/web/login/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Origin': BASE_URL,
+        'Referer': `${BASE_URL}/WManage/web/login/login`,
+        'Cookie': getCookieHeader(),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+      body: form.toString(),
+    });
+    resText = await loginRes.text();
   }
+
+  parseAndSaveCookies(loginRes);
+  console.log('Ket qua login:', resText);
 }
 
 async function sendControl(enable) {
@@ -74,25 +89,24 @@ async function sendControl(enable) {
   const isEnable = Boolean(enable);
   console.log(`--- 3. Gui lenh dieu khien: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} ---`);
 
-  const form = new URLSearchParams();
-  form.append('inverterSn', INVERTER_SN);
-  form.append('functionParam', 'FUNC_TAKE_LOAD_TOGETHER');
-  form.append('enable', isEnable ? 'true' : 'false');
-  form.append('clientType', 'WEB');
-  form.append('remoteSetType', 'NORMAL');
+  const payload = {
+    inverterSn: INVERTER_SN,
+    functionParam: 'FUNC_TAKE_LOAD_TOGETHER',
+    enable: isEnable,
+    clientType: 'WEB',
+    remoteSetType: 'NORMAL'
+  };
 
   const res = await fetch(`${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'Content-Type': 'application/json;charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
       'Accept': 'application/json, text/javascript, */*; q=0.01',
-      'Origin': BASE_URL,
-      'Referer': `${BASE_URL}/WManage/web/maintain/workingMode/index`,
       'Cookie': getCookieHeader(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
-    body: form.toString(),
+    body: JSON.stringify(payload),
   });
 
   parseAndSaveCookies(res);
@@ -103,9 +117,9 @@ async function sendControl(enable) {
 const isEnable = ACTION === 'enable';
 sendControl(isEnable)
   .then(() => {
-    console.log('Thuc hien lenh hoan tat!');
+    console.log('Thuc hien thanh cong!');
   })
   .catch((err) => {
-    console.error('Loi:', err.message || err);
+    console.error('Loi thuc thi:', err.message || err);
     process.exit(1);
   });
