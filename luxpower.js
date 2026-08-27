@@ -7,7 +7,6 @@ const ACTION = process.argv[2] || 'enable';
 let cookies = {};
 
 function parseAndSaveCookies(res) {
-  // Trích xuất toàn bộ cookie từ header set-cookie
   let rawCookies = [];
   if (typeof res.headers.getSetCookie === 'function') {
     rawCookies = res.headers.getSetCookie();
@@ -32,26 +31,27 @@ function getCookieHeader() {
 }
 
 async function performLogin() {
-  console.log('--- 1. Khoi tao phien ket noi (GET login) ---');
-  const initRes = await fetch(`${BASE_URL}/WManage/web/login`, {
+  console.log('--- 1. Khoi tao phien ket noi ---');
+  const initRes = await fetch(`${BASE_URL}/WManage/web/login/login`, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
   });
   parseAndSaveCookies(initRes);
 
-  console.log('--- 2. Gui thong tin dang nhap (POST login) ---');
+  console.log('--- 2. Dang nhap tai khoan ---');
   const form = new URLSearchParams();
   form.append('account', ACCOUNT);
   form.append('password', PASSWORD);
 
-  const loginRes = await fetch(`${BASE_URL}/WManage/web/login`, {
+  const loginRes = await fetch(`${BASE_URL}/WManage/web/login/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
       'Origin': BASE_URL,
-      'Referer': `${BASE_URL}/WManage/web/login`,
+      'Referer': `${BASE_URL}/WManage/web/login/login`,
       'Cookie': getCookieHeader(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
@@ -60,7 +60,7 @@ async function performLogin() {
   parseAndSaveCookies(loginRes);
 
   const resText = await loginRes.text();
-  console.log('Ket qua dang nhap:', resText);
+  console.log('Ket qua login:', resText);
 }
 
 async function sendControl(enable) {
@@ -77,6 +77,9 @@ async function sendControl(enable) {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Origin': BASE_URL,
+      'Referer': `${BASE_URL}/WManage/web/config/function/index`,
       'Cookie': getCookieHeader(),
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     },
@@ -90,9 +93,9 @@ async function sendControl(enable) {
 const isEnable = ACTION === 'enable';
 sendControl(isEnable)
   .then(() => {
-    console.log('Thuc hien thanh cong!');
+    console.log('Xong chuong trinh!');
   })
   .catch((err) => {
-    console.error('Loi thuc thi:', err);
+    console.error('Loi:', err);
     process.exit(1);
   });
