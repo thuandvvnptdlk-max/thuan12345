@@ -20,14 +20,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: setup-python@v5
+      - name: Set up Node.js
+        uses: setup-node@v4
         with:
-          python-version: '3.10'
+          node-version: '20'
 
       - name: Install dependencies
-        run: |
-          pip install requests
+        run: npm install axios
 
       - name: Run LuxPower Script
         env:
@@ -38,5 +37,4 @@ jobs:
           CRON_TRIGGER: ${{ github.event.schedule }}
           TELEGRAM_BOT_TOKEN: "8729735813:AAE98rlGp9Cbito73Cp0TA23u7nzbidWmFI"
           TELEGRAM_CHAT_ID: "1817767495"
-        run: |
-          python main.py
+        run: node luxpower.js
