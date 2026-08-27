@@ -1,56 +1,42 @@
-name: LuxPower Auto Schedule
+name: LuxPower Schedule & Control
 
 on:
-  schedule:
-    # 12:15 VN (TAT)
-    - cron: '15 5 * * *'
-    # 15:01 VN (BAT)
-    - cron: '1 8 * * *'
   workflow_dispatch:
     inputs:
       action:
-        description: 'Chon hanh dong'
+        description: 'Chế độ (enable/disable)'
         required: true
         default: 'enable'
-        type: choice
-        options:
-          - enable
-          - disable
+  schedule:
+    # 01:00 UTC = 08:00 Sáng VN (Lệnh TẮT)
+    - cron: '0 1 * * *'
+    # 04:24 UTC = 11:24 Trưa VN (Lệnh BẬT)
+    - cron: '24 4 * * *'
 
 jobs:
   control:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: setup-python@v5
         with:
-          node-version: 22
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
-          npm install axios axios-cookiejar-support tough-cookie
+          pip install requests
 
-      - name: Determine Action
-        id: determine_action
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
-          else
-            HOUR=$(date -u +%H)
-            if [ "$HOUR" -eq 5 ]; then
-              echo "ACTION=disable" >> $GITHUB_ENV
-            else
-              echo "ACTION=enable" >> $GITHUB_ENV
-            fi
-          fi
-
-      - name: Run LuxPower Control
+      - name: Run LuxPower Script
         env:
-          LUX_ACCOUNT: ${{ secrets.LUX_ACCOUNT }}
+          LUX_USER: ${{ secrets.LUX_USER }}
           LUX_PASSWORD: ${{ secrets.LUX_PASSWORD }}
-          INVERTER_SN: ${{ secrets.INVERTER_SN }}
+          LUX_DONGLE: ${{ secrets.LUX_DONGLE }}
+          ACTION_INPUT: ${{ github.event.inputs.action }}
+          CRON_TRIGGER: ${{ github.event.schedule }}
+          TELEGRAM_BOT_TOKEN: "8729735813:AAE98rlGp9Cbito73Cp0TA23u7nzbidWmFI"
+          TELEGRAM_CHAT_ID: "1817767495"
         run: |
-          node luxpower.js $ACTION
+          python main.py
