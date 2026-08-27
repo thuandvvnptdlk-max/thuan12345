@@ -6,7 +6,10 @@ const BASE_URL = 'https://vn.luxpowertek.com';
 const ACCOUNT = process.env.LUX_ACCOUNT;
 const PASSWORD = process.env.LUX_PASSWORD;
 const INVERTER_SN = process.env.INVERTER_SN || '60403U0700';
-const ACTION = process.argv[2] || 'enable';
+const rawAction = (process.argv[2] || 'enable').trim().toLowerCase();
+
+// Xác định chính xác trạng thái Bật hay Tắt
+const isEnable = rawAction === 'enable' || rawAction === 'true';
 
 const jar = new CookieJar();
 const client = wrapper(axios.create({
@@ -36,7 +39,6 @@ async function run() {
   });
   console.log('Dang nhap thanh cong!');
 
-  const isEnable = ACTION === 'enable';
   console.log(`>>> [3] Gui lenh dieu khien: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} <<<`);
 
   const controlParams = new URLSearchParams();
