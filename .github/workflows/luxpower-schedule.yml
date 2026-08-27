@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Chọn hành động muốn thực hiện'
+        description: 'Chon hanh dong'
         required: true
         default: 'enable'
         type: choice
@@ -27,10 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm install node-fetch
+          node-version: 22
 
       - name: Determine Action
         id: determine_action
@@ -48,7 +45,6 @@ jobs:
 
       - name: Run LuxPower Control
         env:
-          BASE_URL: ${{ secrets.BASE_URL }}
           LUX_ACCOUNT: ${{ secrets.LUX_ACCOUNT }}
           LUX_PASSWORD: ${{ secrets.LUX_PASSWORD }}
           INVERTER_SN: ${{ secrets.INVERTER_SN }}
