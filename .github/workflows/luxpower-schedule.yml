@@ -2,10 +2,10 @@ name: LuxPower Auto Schedule
 
 on:
   schedule:
-    # 08:15 VN (TAT)
-    - cron: '15 1 * * *'
-    # 06:00 VN (BAT)
-    - cron: '0 23 * * *'
+    # 08:00 VN (TAT)
+    - cron: '0 1 * * *'
+    # 11:24 VN (BAT)
+    - cron: '24 4 * * *'
   workflow_dispatch:
     inputs:
       action:
