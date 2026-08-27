@@ -8,8 +8,8 @@ const PASSWORD = process.env.LUX_PASSWORD;
 const INVERTER_SN = process.env.INVERTER_SN || '60403U0700';
 const rawAction = (process.argv[2] || 'enable').trim().toLowerCase();
 
-// Xác định chính xác trạng thái Bật hay Tắt
 const isEnable = rawAction === 'enable' || rawAction === 'true';
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const jar = new CookieJar();
 const client = wrapper(axios.create({
@@ -20,35 +20,36 @@ const client = wrapper(axios.create({
   }
 }));
 
-async function run() {
-  console.log('>>> [1] Khoi tao phien ket noi <<<');
+async function login() {
+  console.log('>>> [1] Khoi tao phien ket noi & Session Cookie <<<');
   await client.get(`${BASE_URL}/WManage/web/login`);
 
-  console.log('>>> [2] Dang nhap tai khoan LuxPower <<<');
+  console.log('>>> [2] Dang nhap vao he thong LuxPower <<<');
   const loginParams = new URLSearchParams();
   loginParams.append('account', ACCOUNT);
   loginParams.append('password', PASSWORD);
 
-  await client.post(`${BASE_URL}/WManage/web/login`, loginParams.toString(), {
+  const loginRes = await client.post(`${BASE_URL}/WManage/web/login`, loginParams.toString(), {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
       'Referer': `${BASE_URL}/WManage/web/login`,
       'Origin': BASE_URL,
     }
   });
   console.log('Dang nhap thanh cong!');
+}
 
-  console.log(`>>> [3] Gui lenh dieu khien: ${isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)'} <<<`);
-
+async function sendControlCommand(enable) {
   const controlParams = new URLSearchParams();
   controlParams.append('inverterSn', INVERTER_SN);
   controlParams.append('functionParam', 'FUNC_TAKE_LOAD_TOGETHER');
-  controlParams.append('enable', isEnable ? 'true' : 'false');
+  controlParams.append('enable', enable ? 'true' : 'false');
   controlParams.append('clientType', 'WEB');
   controlParams.append('remoteSetType', 'NORMAL');
 
-  const controlRes = await client.post(`${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`, controlParams.toString(), {
+  const res = await client.post(`${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`, controlParams.toString(), {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
@@ -57,12 +58,59 @@ async function run() {
       'Origin': BASE_URL,
     }
   });
+  return res.data;
+}
 
-  console.log('Ket qua tu Inverter:', JSON.stringify(controlRes.data));
-  console.log('>>> THUC THI HOAN TAT <<<');
+async function refreshServer() {
+  try {
+    const params = new URLSearchParams();
+    params.append('inverterSn', INVERTER_SN);
+
+    await client.post(`${BASE_URL}/WManage/web/maintain/remoteTransfer/refreshInputData`, params.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+      }
+    });
+    console.log('Da gui lenh ep bien tan dong bo du lieu ve server.');
+  } catch (e) {
+    // Bo qua loi refresh neu co
+  }
+}
+
+async function run() {
+  await login();
+
+  const targetText = isEnable ? 'ENABLE (BAT)' : 'DISABLE (TAT)';
+  console.log(`>>> [3] Tien hanh gui lenh: ${targetText} <<<`);
+
+  let maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Dang gui lenh lan ${attempt}/${maxRetries}...`);
+      const result = await sendControlCommand(isEnable);
+      console.log('Ket qua phan hoi tu Inverter:', JSON.stringify(result));
+
+      if (result && (result.success === true || result.msg === 'success' || !result.msg)) {
+        await sleep(2000);
+        await refreshServer();
+        console.log(`>>> THANH CONG: DA ${targetText} HOAN TAT <<<`);
+        return;
+      } else {
+        console.warn(`Server chua nhan lenh. Thu lai sau 3s...`);
+        await sleep(3000);
+      }
+    } catch (err) {
+      console.error(`Loi lan thu ${attempt}:`, err.message);
+      if (attempt < maxRetries) await sleep(3000);
+    }
+  }
+
+  throw new Error(`Da thu ${maxRetries} lan nhung server chua chap nhan.`);
 }
 
 run().catch((err) => {
-  console.error('Loi:', err.response ? (typeof err.response.data === 'object' ? JSON.stringify(err.response.data) : err.response.data) : err.message);
+  console.error('Loi:', err.message || err);
   process.exit(1);
 });
