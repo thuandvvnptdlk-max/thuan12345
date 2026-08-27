@@ -2,8 +2,10 @@ name: LuxPower Auto Schedule
 
 on:
   schedule:
-    - cron: '0 1 * * *'
-    - cron: '24 4 * * *'
+    # 12:15 VN (TAT)
+    - cron: '15 5 * * *'
+    # 13:31 VN (BAT)
+    - cron: '31 6 * * *'
   workflow_dispatch:
     inputs:
       action:
@@ -37,9 +39,8 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
           else
-            VN_HOUR=$(TZ='Asia/Ho_Chi_Minh' date +%H)
-            echo "Gio VN hien tai: $VN_HOUR"
-            if [ "$VN_HOUR" -lt 10 ]; then
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -eq 5 ]; then
               echo "ACTION=disable" >> $GITHUB_ENV
             else
               echo "ACTION=enable" >> $GITHUB_ENV
