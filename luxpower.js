@@ -2,13 +2,17 @@ const axios = require('axios');
 
 const username = process.env.LUX_USER;
 const password = process.env.LUX_PASSWORD;
-const dongleSn = process.env.LUX_DONGLE;
+const dongleSn = process.env.LUX_DONGLE || '60403U0700';
 
 let action = process.env.ACTION_INPUT;
 const cron = process.env.CRON_TRIGGER;
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
+
+const BASE_URL = 'https://vn.luxpowertek.com';
+const LOGIN_URL = `${BASE_URL}/WManage/web/login/login`;
+const CONTROL_URL = `${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`;
 
 if (!action) {
   if (cron === "0 1 * * *") {
@@ -35,28 +39,34 @@ async function notifyTelegram(message) {
 
 async function main() {
   const timeNow = new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-  const actionText = action.toLowerCase() === 'enable' ? 'BẬT' : 'TẮT';
+  const isEnable = action.toLowerCase() === 'enable';
+  const actionText = isEnable ? 'BẬT (ENABLE)' : 'TẮT (DISABLE)';
 
   console.log(`[${timeNow}] Bắt đầu thực hiện lệnh: ${actionText}`);
 
+  if (!username || !password) {
+    const errText = `❌ LuxPower Thất bại\nThiếu biến môi trường (LUX_USER, LUX_PASSWORD).`;
+    await notifyTelegram(errText);
+    process.exit(1);
+  }
+
   try {
-    const domain = 'https://vn.luxpowertek.com';
-
-    // 1. Đăng nhập hệ thống LuxPower
-    const params = new URLSearchParams();
-    params.append('account', username.trim());
-    params.append('password', password.trim());
-
+    // 1. Đăng nhập theo đúng API Extension
     console.log("Đang đăng nhập hệ thống LuxPower VN...");
-    const loginRes = await axios.post(`${domain}/WManage/api/login`, params.toString(), {
+    const loginParams = new URLSearchParams();
+    loginParams.append('account', username.trim());
+    loginParams.append('password', password.trim());
+
+    const loginRes = await axios.post(LOGIN_URL, loginParams.toString(), {
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       },
       timeout: 15000
     });
 
-    if (!loginRes.data || !loginRes.data.success) {
+    if (!loginRes.data || loginRes.data.success === false) {
       throw new Error(`Đăng nhập thất bại: ${JSON.stringify(loginRes.data)}`);
     }
 
@@ -64,60 +74,37 @@ async function main() {
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
     console.log("Đăng nhập thành công!");
 
-    // 2. Gửi lệnh điều khiển bật/tắt biến tần
-    const isEnable = action.toLowerCase() === 'enable';
-    
-    // LuxPower dùng hold: 1 để On (Bật), 0 để Off/Standby (Tắt)
-    const setParams = new URLSearchParams();
-    setParams.append('serialNum', dongleSn.trim());
-    setParams.append('inverterSn', dongleSn.trim());
-    setParams.append('hold', isEnable ? '1' : '0');
-    setParams.append('remoteType', '1');
+    // 2. Gửi lệnh điều khiển chuẩn xác theo Extension
+    const controlParams = new URLSearchParams();
+    controlParams.append('inverterSn', dongleSn.trim());
+    controlParams.append('functionParam', 'FUNC_TAKE_LOAD_TOGETHER');
+    controlParams.append('enable', isEnable ? 'true' : 'false');
+    controlParams.append('clientType', 'WEB');
+    controlParams.append('remoteSetType', 'NORMAL');
 
-    // Danh sách các route thực tế của LuxPower
-    const endpoints = [
-      `${domain}/WManage/web/inverter/setFunction`,
-      `${domain}/WManage/web/inverter/setParam`,
-      `${domain}/WManage/web/inverter/quickSet`,
-      `${domain}/WManage/api/inverter/setParam`
-    ];
+    console.log(`Đang gửi lệnh ${actionText} tới Inverter ${dongleSn.trim()}...`);
 
-    let success = false;
-    let lastData = null;
-    let errLogs = [];
+    const controlRes = await axios.post(CONTROL_URL, controlParams.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Cookie': cookieHeader,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      },
+      timeout: 15000
+    });
 
-    for (const ep of endpoints) {
-      try {
-        console.log(`Đang gửi lệnh tới: ${ep}`);
-        const res = await axios.post(ep, setParams.toString(), {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': cookieHeader,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-          },
-          timeout: 15000
-        });
+    console.log("Phản hồi Server:", controlRes.data);
 
-        if (res.data && (res.data.success || res.data.code === 200 || res.data.msgCode === 200)) {
-          success = true;
-          lastData = res.data;
-          break;
-        } else {
-          errLogs.push(`${ep} -> ${JSON.stringify(res.data)}`);
-        }
-      } catch (e) {
-        errLogs.push(`${ep} -> HTTP ${e.response ? e.response.status : e.message}`);
-      }
+    if (controlRes.data && controlRes.data.success === false) {
+      throw new Error(`Lỗi API: ${controlRes.data.msg || JSON.stringify(controlRes.data)}`);
     }
 
-    if (!success) {
-      throw new Error(errLogs.join('\n'));
-    }
-
-    // 3. Báo cáo hoàn tất
+    // 3. Thông báo thành công về Telegram
     const successMsg = `☀️ LuxPower Thông Báo\n\n` +
                        `⏰ Thời gian: ${timeNow}\n` +
-                       `⚙️ Lệnh: Đã ${actionText} biến tần thành công!\n` +
+                       `⚙️ Lệnh: Đã ${actionText} thành công!\n` +
                        `📟 Thiết bị: ${dongleSn.trim()}`;
 
     await notifyTelegram(successMsg);
@@ -127,7 +114,7 @@ async function main() {
     const errorMsg = `❌ LuxPower Thất bại\n\n` +
                      `⏰ Thời gian: ${timeNow}\n` +
                      `⚙️ Lệnh: ${actionText}\n` +
-                     `⚠️ Chi tiết:\n${error.message}`;
+                     `⚠️ Chi tiết: ${error.message}`;
     console.error(errorMsg);
     await notifyTelegram(errorMsg);
     process.exit(1);
