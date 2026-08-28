@@ -11,10 +11,8 @@ const cron = process.env.CRON_TRIGGER;
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
 
-// Địa chỉ máy chủ LuxPower Việt Nam
 const BASE_URL = 'https://vn.luxpowertek.com';
 
-// 2. Tự động xác định hành động nếu chạy theo lịch Cron
 if (!action) {
   if (cron === "0 1 * * *") {
     action = "disable";
@@ -25,7 +23,6 @@ if (!action) {
   }
 }
 
-// Hàm gửi thông báo về Telegram
 async function notifyTelegram(message) {
   if (!botToken || !chatId) return;
   try {
@@ -54,10 +51,10 @@ async function main() {
   }
 
   try {
-    // Bước 1: Đăng nhập vào Server Việt Nam
-    console.log("Đang đăng nhập hệ thống LuxPower (Server VN)...");
+    // Bước 1: Đăng nhập vào Server VN (/api/login)
+    console.log("Đang đăng nhập hệ thống LuxPower VN...");
     const loginRes = await axios.post(
-      `${BASE_URL}/WManage/api/login`,
+      `${BASE_URL}/api/login`,
       `account=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -65,10 +62,9 @@ async function main() {
     );
 
     if (!loginRes.data || !loginRes.data.success) {
-      throw new Error(`Đăng nhập LuxPower thất bại: ${JSON.stringify(loginRes.data)}`);
+      throw new Error(`Đăng nhập thất bại: ${JSON.stringify(loginRes.data)}`);
     }
 
-    // Lấy cookie phiên làm việc
     const cookies = loginRes.headers['set-cookie'];
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
 
@@ -82,7 +78,7 @@ async function main() {
 
     // Bước 3: Gửi lệnh thay đổi chế độ
     const setRes = await axios.post(
-      `${BASE_URL}/WManage/api/inverter/set/common`,
+      `${BASE_URL}/api/inverter/set/common`,
       params.toString(),
       {
         headers: {
@@ -94,14 +90,14 @@ async function main() {
 
     console.log("Phản hồi từ LuxPower:", setRes.data);
 
-    // Bước 4: Gửi thông báo thành công về Telegram
+    // Bước 4: Thông báo thành công
     const successMsg = `☀️ <b>LuxPower Thông Báo</b>\n\n` +
                        `⏰ <b>Thời gian:</b> ${timeNow}\n` +
                        `⚙️ <b>Lệnh:</b> Đã <b>${actionText}</b> biến tần thành công!\n` +
                        `📟 <b>Thiết bị:</b> <code>${dongleSn}</code>`;
     
     await notifyTelegram(successMsg);
-    console.log("Đã hoàn tất quy trình và gửi báo cáo về Telegram.");
+    console.log("Hoàn tất.");
 
   } catch (error) {
     const errorMsg = `❌ <b>LuxPower Thất bại</b>\n\n` +
