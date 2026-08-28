@@ -42,12 +42,12 @@ async function main() {
   try {
     const domain = 'https://vn.luxpowertek.com';
 
-    // 1. Đăng nhập
+    // 1. Đăng nhập hệ thống LuxPower
     const params = new URLSearchParams();
     params.append('account', username.trim());
     params.append('password', password.trim());
 
-    console.log("Đang đăng nhập hệ thống...");
+    console.log("Đang đăng nhập hệ thống LuxPower VN...");
     const loginRes = await axios.post(`${domain}/WManage/api/login`, params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -62,68 +62,66 @@ async function main() {
 
     const cookies = loginRes.headers['set-cookie'];
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
-    const userToken = loginRes.data.token || (loginRes.data.rows && loginRes.data.rows.token) || '';
-
     console.log("Đăng nhập thành công!");
 
-    // 2. Danh sách các endpoint điều khiển tiềm năng
+    // 2. Gửi lệnh điều khiển bật/tắt biến tần
     const isEnable = action.toLowerCase() === 'enable';
-    const postBody = new URLSearchParams();
-    postBody.append('serialNum', dongleSn.trim());
-    postBody.append('inverterSn', dongleSn.trim());
-    postBody.append('hold', isEnable ? '1' : '0');
-    postBody.append('remoteType', '1');
+    
+    // LuxPower dùng hold: 1 để On (Bật), 0 để Off/Standby (Tắt)
+    const setParams = new URLSearchParams();
+    setParams.append('serialNum', dongleSn.trim());
+    setParams.append('inverterSn', dongleSn.trim());
+    setParams.append('hold', isEnable ? '1' : '0');
+    setParams.append('remoteType', '1');
 
+    // Danh sách các route thực tế của LuxPower
     const endpoints = [
-      `${domain}/WManage/web/inverter/set/common`,
-      `${domain}/WManage/web/inverter/setCommon`,
-      `${domain}/WManage/api/inverter/setCommon`,
-      `${domain}/WManage/api/setCommon`,
-      `${domain}/WManage/api/v1/inverter/set/common`
+      `${domain}/WManage/web/inverter/setFunction`,
+      `${domain}/WManage/web/inverter/setParam`,
+      `${domain}/WManage/web/inverter/quickSet`,
+      `${domain}/WManage/api/inverter/setParam`
     ];
 
     let success = false;
-    let successData = null;
-    const errors = [];
+    let lastData = null;
+    let errLogs = [];
 
     for (const ep of endpoints) {
       try {
-        console.log(`Thử gửi tới: ${ep}`);
-        const res = await axios.post(ep, postBody.toString(), {
+        console.log(`Đang gửi lệnh tới: ${ep}`);
+        const res = await axios.post(ep, setParams.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Cookie': cookieHeader,
-            'token': userToken,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
           },
           timeout: 15000
         });
 
-        if (res.data && (res.data.success || res.data.msgCode === 200 || res.data.code === 200)) {
+        if (res.data && (res.data.success || res.data.code === 200 || res.data.msgCode === 200)) {
           success = true;
-          successData = res.data;
-          console.log(`Thành công với endpoint: ${ep}`);
+          lastData = res.data;
           break;
         } else {
-          errors.push(`${ep} => ${JSON.stringify(res.data)}`);
+          errLogs.push(`${ep} -> ${JSON.stringify(res.data)}`);
         }
       } catch (e) {
-        errors.push(`${ep} => HTTP ${e.response ? e.response.status : e.message}`);
+        errLogs.push(`${ep} -> HTTP ${e.response ? e.response.status : e.message}`);
       }
     }
 
     if (!success) {
-      throw new Error(errors.join('\n'));
+      throw new Error(errLogs.join('\n'));
     }
 
-    // 3. Thông báo thành công về Telegram
+    // 3. Báo cáo hoàn tất
     const successMsg = `☀️ LuxPower Thông Báo\n\n` +
                        `⏰ Thời gian: ${timeNow}\n` +
                        `⚙️ Lệnh: Đã ${actionText} biến tần thành công!\n` +
                        `📟 Thiết bị: ${dongleSn.trim()}`;
 
     await notifyTelegram(successMsg);
-    console.log("Hoàn tất.");
+    console.log("Hoàn tất thành công.");
 
   } catch (error) {
     const errorMsg = `❌ LuxPower Thất bại\n\n` +
