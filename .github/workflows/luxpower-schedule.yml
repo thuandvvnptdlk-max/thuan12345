@@ -1,41 +1,27 @@
-name: LuxPower Schedule & Control
+async function triggerGitHubAction(actionName) {
+  // Thay đúng tên file workflow ở đuôi URL nếu file của bạn tên khác
+  const workflowFileName = "luxpower-schedule.yml";
+  const url = `https://api.github.com/repos/${GH_REPO}/actions/workflows/${workflowFileName}/dispatches`;
+  
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${GH_TOKEN}`,
+      "Accept": "application/vnd.github.v3+json",
+      "User-Agent": "TelegramBot-Cloudflare",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      ref: "main",
+      inputs: { action: actionName }
+    })
+  });
 
-on:
-  workflow_dispatch:
-    inputs:
-      action:
-        description: 'Chế độ (enable/disable)'
-        required: true
-        default: 'enable'
-schedule:
-    # Mốc test lúc 17:14 chiều nay (10:14 UTC)
-    - cron: '14 10 * * *'
-    # 2 mốc chạy cố định hàng ngày
-    - cron: '0 1 * * *'
-    - cron: '24 4 * * *'
-
-jobs:
-  control:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install axios
-
-      - name: Run LuxPower Script
-        env:
-          LUX_USER: ${{ secrets.LUX_USER }}
-          LUX_PASSWORD: ${{ secrets.LUX_PASSWORD }}
-          LUX_DONGLE: ${{ secrets.LUX_DONGLE }}
-          ACTION_INPUT: ${{ github.event.inputs.action }}
-          CRON_TRIGGER: ${{ github.event.schedule }}
-          TELEGRAM_BOT_TOKEN: "8729735813:AAE98rlGp9Cbito73Cp0TA23u7nzbidWmFI"
-          TELEGRAM_CHAT_ID: "1817767495"
-        run: node luxpower.js
+  if (res.status !== 204) {
+    const errorText = await res.text();
+    console.error(`GitHub Error [${res.status}]:`, errorText);
+    await sendTelegram(ALLOWED_CHAT_ID, `❌ Lỗi GitHub [${res.status}]: ${errorText}`);
+    return false;
+  }
+  return true;
+}
