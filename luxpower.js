@@ -29,7 +29,7 @@ async function notifyTelegram(message) {
       text: message
     });
   } catch (err) {
-    console.error("Lỗi Telegram:", err.response ? JSON.stringify(err.response.data) : err.message);
+    console.error("Lỗi gửi Telegram:", err.message);
   }
 }
 
@@ -40,7 +40,7 @@ async function main() {
   console.log(`[${timeNow}] Bắt đầu thực hiện lệnh: ${actionText}`);
 
   try {
-    const baseUrl = 'https://vn.luxpowertek.com/WManage';
+    const domain = 'https://vn.luxpowertek.com';
 
     // 1. Đăng nhập
     const params = new URLSearchParams();
@@ -48,7 +48,7 @@ async function main() {
     params.append('password', password.trim());
 
     console.log("Đang đăng nhập hệ thống...");
-    const loginRes = await axios.post(`${baseUrl}/api/login`, params.toString(), {
+    const loginRes = await axios.post(`${domain}/WManage/api/login`, params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -62,32 +62,38 @@ async function main() {
 
     const cookies = loginRes.headers['set-cookie'];
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+    const userToken = loginRes.data.token || (loginRes.data.rows && loginRes.data.rows.token) || '';
+
     console.log("Đăng nhập thành công!");
 
-    // 2. Gửi lệnh điều khiển theo các endpoint chính của LuxPower
+    // 2. Danh sách các endpoint điều khiển tiềm năng
     const isEnable = action.toLowerCase() === 'enable';
-    const setEndpoints = [
-      `${baseUrl}/api/setCommon`,
-      `${baseUrl}/api/inverter/setCommon`,
-      `${baseUrl}/api/inverter/set/quick`
+    const postBody = new URLSearchParams();
+    postBody.append('serialNum', dongleSn.trim());
+    postBody.append('inverterSn', dongleSn.trim());
+    postBody.append('hold', isEnable ? '1' : '0');
+    postBody.append('remoteType', '1');
+
+    const endpoints = [
+      `${domain}/WManage/web/inverter/set/common`,
+      `${domain}/WManage/web/inverter/setCommon`,
+      `${domain}/WManage/api/inverter/setCommon`,
+      `${domain}/WManage/api/setCommon`,
+      `${domain}/WManage/api/v1/inverter/set/common`
     ];
 
     let success = false;
-    let lastResponse = null;
+    let successData = null;
+    const errors = [];
 
-    for (const ep of setEndpoints) {
+    for (const ep of endpoints) {
       try {
-        console.log(`Đang gửi lệnh tới: ${ep}`);
-        
-        const setParams = new URLSearchParams();
-        setParams.append('serialNum', dongleSn.trim());
-        setParams.append('hold', isEnable ? '1' : '0');
-        setParams.append('remoteType', '1');
-
-        const res = await axios.post(ep, setParams.toString(), {
+        console.log(`Thử gửi tới: ${ep}`);
+        const res = await axios.post(ep, postBody.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Cookie': cookieHeader,
+            'token': userToken,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
           },
           timeout: 15000
@@ -95,34 +101,35 @@ async function main() {
 
         if (res.data && (res.data.success || res.data.msgCode === 200 || res.data.code === 200)) {
           success = true;
-          lastResponse = res.data;
+          successData = res.data;
+          console.log(`Thành công với endpoint: ${ep}`);
           break;
         } else {
-          lastResponse = res.data;
+          errors.push(`${ep} => ${JSON.stringify(res.data)}`);
         }
       } catch (e) {
-        lastResponse = `${ep} -> HTTP ${e.response ? e.response.status : e.message}`;
+        errors.push(`${ep} => HTTP ${e.response ? e.response.status : e.message}`);
       }
     }
 
     if (!success) {
-      throw new Error(`Máy chủ không phản hồi thành công: ${JSON.stringify(lastResponse)}`);
+      throw new Error(errors.join('\n'));
     }
 
-    // 3. Báo cáo thành công
+    // 3. Thông báo thành công về Telegram
     const successMsg = `☀️ LuxPower Thông Báo\n\n` +
                        `⏰ Thời gian: ${timeNow}\n` +
                        `⚙️ Lệnh: Đã ${actionText} biến tần thành công!\n` +
                        `📟 Thiết bị: ${dongleSn.trim()}`;
 
     await notifyTelegram(successMsg);
-    console.log("Hoàn tất thành công.");
+    console.log("Hoàn tất.");
 
   } catch (error) {
     const errorMsg = `❌ LuxPower Thất bại\n\n` +
                      `⏰ Thời gian: ${timeNow}\n` +
                      `⚙️ Lệnh: ${actionText}\n` +
-                     `⚠️ Chi tiết: ${error.message}`;
+                     `⚠️ Chi tiết:\n${error.message}`;
     console.error(errorMsg);
     await notifyTelegram(errorMsg);
     process.exit(1);
