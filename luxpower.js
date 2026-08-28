@@ -34,25 +34,29 @@ async function notifyTelegram(message) {
   }
 }
 
-async function tryLogin(baseUrl) {
-  const loginParams = new URLSearchParams();
-  loginParams.append('account', username.trim());
-  loginParams.append('password', password.trim());
+async function performLuxRequest(endpointBase) {
+  const loginUrl = `${endpointBase}/login`;
+  
+  // Thử gửi dạng Form
+  const params = new URLSearchParams();
+  params.append('account', username.trim());
+  params.append('password', password.trim());
 
-  const res = await axios.post(`${baseUrl}/WManage/api/login`, loginParams.toString(), {
+  const loginRes = await axios.post(loginUrl, params.toString(), {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     },
-    timeout: 15000
+    timeout: 10000
   });
 
-  if (res.data && res.data.success) {
-    const cookies = res.headers['set-cookie'];
+  if (loginRes.data && (loginRes.data.success || loginRes.data.msgCode === 200 || loginRes.data.code === 200)) {
+    const cookies = loginRes.headers['set-cookie'];
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
-    return { success: true, cookieHeader, baseUrl };
+    return { success: true, cookieHeader, endpointBase, data: loginRes.data };
   }
-  return { success: false, data: res.data };
+
+  return { success: false, data: loginRes.data };
 }
 
 async function main() {
@@ -66,62 +70,65 @@ async function main() {
     process.exit(1);
   }
 
-  try {
-    const servers = ['https://server.luxpowertek.com', 'https://vn.luxpowertek.com'];
-    let loginData = null;
-    let lastError = '';
+  const candidateEndpoints = [
+    'https://vn.luxpowertek.com/api',
+    'https://vn.luxpowertek.com/WManage/web',
+    'https://vn.luxpowertek.com/WManage/api',
+    'https://server.luxpowertek.com/WManage/api'
+  ];
 
-    for (const srv of servers) {
-      try {
-        console.log(`Thử đăng nhập vào: ${srv}...`);
-        const res = await tryLogin(srv);
-        if (res.success) {
-          loginData = res;
-          break;
-        } else {
-          lastError = JSON.stringify(res.data);
-        }
-      } catch (err) {
-        lastError = err.message;
+  let activeSession = null;
+  let errorHistory = [];
+
+  for (const ep of candidateEndpoints) {
+    try {
+      console.log(`Kiểm tra cổng: ${ep}...`);
+      const res = await performLuxRequest(ep);
+      if (res.success) {
+        activeSession = res;
+        console.log(`Đăng nhập thành công tại cổng: ${ep}`);
+        break;
+      } else {
+        errorHistory.push(`${ep} -> ${JSON.stringify(res.data)}`);
       }
+    } catch (err) {
+      errorHistory.push(`${ep} -> HTTP ${err.response ? err.response.status : err.message}`);
     }
+  }
 
-    if (!loginData) {
-      throw new Error(`Đăng nhập không thành công trên các máy chủ: ${lastError}`);
-    }
+  if (!activeSession) {
+    const msg = `❌ <b>LuxPower Thất bại</b>\n\n` +
+                `⏰ <b>Thời gian:</b> ${timeNow}\n` +
+                `⚙️ <b>Lệnh:</b> ${actionText}\n` +
+                `⚠️ <b>Chi tiết phản hồi từ các cổng:</b>\n<code>${errorHistory.join('\n')}</code>`;
+    await notifyTelegram(msg);
+    process.exit(1);
+  }
 
-    // Gửi lệnh Bật / Tắt
+  try {
     const isEnable = action.toLowerCase() === 'enable';
     const setParams = new URLSearchParams();
     setParams.append('serialNum', dongleSn.trim());
     setParams.append('hold', isEnable ? '1' : '0');
 
-    const setRes = await axios.post(
-      `${loginData.baseUrl}/WManage/api/inverter/set/common`,
-      setParams.toString(),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie': loginData.cookieHeader,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        },
-        timeout: 15000
-      }
-    );
+    const targetSetUrl = `${activeSession.endpointBase}/inverter/set/common`;
+    const setRes = await axios.post(targetSetUrl, setParams.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': activeSession.cookieHeader,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      },
+      timeout: 10000
+    });
 
     const successMsg = `☀️ <b>LuxPower Thông Báo</b>\n\n` +
                        `⏰ <b>Thời gian:</b> ${timeNow}\n` +
                        `⚙️ <b>Lệnh:</b> Đã <b>${actionText}</b> biến tần thành công!\n` +
                        `📟 <b>Thiết bị:</b> <code>${dongleSn.trim()}</code>`;
-    
     await notifyTelegram(successMsg);
-
   } catch (error) {
-    const errorMsg = `❌ <b>LuxPower Thất bại</b>\n\n` +
-                     `⏰ <b>Thời gian:</b> ${timeNow}\n` +
-                     `⚙️ <b>Lệnh:</b> ${actionText}\n` +
-                     `⚠️ <b>Chi tiết:</b> ${error.message}`;
-    await notifyTelegram(errorMsg);
+    const detail = error.response ? `${error.message} (${JSON.stringify(error.response.data)})` : error.message;
+    await notifyTelegram(`❌ <b>Lỗi gửi lệnh điều khiển:</b> ${detail}`);
     process.exit(1);
   }
 }
