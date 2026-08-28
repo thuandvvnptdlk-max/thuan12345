@@ -40,14 +40,15 @@ async function main() {
   console.log(`[${timeNow}] Bắt đầu thực hiện lệnh: ${actionText}`);
 
   try {
-    const baseUrl = 'https://vn.luxpowertek.com/WManage/api';
+    const domain = 'https://vn.luxpowertek.com';
 
     // 1. Đăng nhập
     const params = new URLSearchParams();
     params.append('account', username.trim());
     params.append('password', password.trim());
 
-    const loginRes = await axios.post(`${baseUrl}/login`, params.toString(), {
+    console.log("Đang đăng nhập hệ thống...");
+    const loginRes = await axios.post(`${domain}/WManage/api/login`, params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -61,32 +62,60 @@ async function main() {
 
     const cookies = loginRes.headers['set-cookie'];
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+    console.log("Đăng nhập thành công, cookie nhận được.");
 
-    // 2. Gửi lệnh Bật / Tắt
+    // 2. Thử các endpoint điều khiển
     const isEnable = action.toLowerCase() === 'enable';
     const setParams = new URLSearchParams();
     setParams.append('serialNum', dongleSn.trim());
     setParams.append('hold', isEnable ? '1' : '0');
 
-    const setRes = await axios.post(`${baseUrl}/inverter/set/common`, setParams.toString(), {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': cookieHeader,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-      },
-      timeout: 15000
-    });
+    const controlEndpoints = [
+      `${domain}/WManage/api/inverter/set/common`,
+      `${domain}/WManage/api/inverter/setCommon`,
+      `${domain}/WManage/api/inverter/set/quick`,
+      `${domain}/WManage/api/inverter/set/func`
+    ];
 
-    console.log("Phản hồi từ LuxPower:", setRes.data);
+    let successRes = null;
+    let lastErr = '';
 
-    // 3. Gửi tin nhắn thành công
+    for (const ep of controlEndpoints) {
+      try {
+        console.log(`Thử gửi lệnh tới: ${ep}`);
+        const res = await axios.post(ep, setParams.toString(), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': cookieHeader,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+          },
+          timeout: 15000
+        });
+
+        if (res.data && (res.data.success || res.data.msgCode === 200 || res.data.code === 200)) {
+          successRes = res.data;
+          console.log(`Gửi lệnh thành công tại: ${ep}`);
+          break;
+        } else {
+          lastErr = JSON.stringify(res.data);
+        }
+      } catch (err) {
+        lastErr = `${ep} -> HTTP ${err.response ? err.response.status : err.message}`;
+      }
+    }
+
+    if (!successRes) {
+      throw new Error(`Không gửi được lệnh qua các endpoint: ${lastErr}`);
+    }
+
+    // 3. Gửi thông báo thành công
     const successMsg = `☀️ LuxPower Thông Báo\n\n` +
                        `⏰ Thời gian: ${timeNow}\n` +
                        `⚙️ Lệnh: Đã ${actionText} biến tần thành công!\n` +
                        `📟 Thiết bị: ${dongleSn.trim()}`;
 
     await notifyTelegram(successMsg);
-    console.log("Hoàn tất thành công 100%!");
+    console.log("Quy trình hoàn tất thành công 100%.");
 
   } catch (error) {
     const errorMsg = `❌ LuxPower Thất bại\n\n` +
