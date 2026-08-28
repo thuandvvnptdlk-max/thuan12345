@@ -11,7 +11,8 @@ const cron = process.env.CRON_TRIGGER;
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
 
-const BASE_URL = 'https://vn.luxpowertek.com';
+// Địa chỉ cổng máy chủ LuxPower Việt Nam
+const BASE_URL = 'https://vn.luxpowertek.com/WManage';
 
 if (!action) {
   if (cron === "0 1 * * *") {
@@ -51,11 +52,11 @@ async function main() {
   }
 
   try {
-    // Bước 1: Đăng nhập vào Server VN (/api/login)
-    console.log("Đang đăng nhập hệ thống LuxPower VN...");
+    // Bước 1: Đăng nhập vào Server VN
+    console.log("Đang đăng nhập hệ thống LuxPower (Server VN)...");
     const loginRes = await axios.post(
       `${BASE_URL}/api/login`,
-      `account=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+      `account=${encodeURIComponent(username.trim())}&password=${encodeURIComponent(password.trim())}`,
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       }
@@ -71,7 +72,7 @@ async function main() {
     // Bước 2: Chuẩn bị tham số cài đặt
     const isEnable = action.toLowerCase() === 'enable';
     const params = new URLSearchParams();
-    params.append('serialNum', dongleSn);
+    params.append('serialNum', dongleSn.trim());
     params.append('hold', isEnable ? '1' : '0');
 
     console.log(`Đang gửi lệnh ${actionText} tới Inverter ${dongleSn}...`);
@@ -90,14 +91,14 @@ async function main() {
 
     console.log("Phản hồi từ LuxPower:", setRes.data);
 
-    // Bước 4: Thông báo thành công
+    // Bước 4: Gửi thông báo thành công
     const successMsg = `☀️ <b>LuxPower Thông Báo</b>\n\n` +
                        `⏰ <b>Thời gian:</b> ${timeNow}\n` +
                        `⚙️ <b>Lệnh:</b> Đã <b>${actionText}</b> biến tần thành công!\n` +
                        `📟 <b>Thiết bị:</b> <code>${dongleSn}</code>`;
     
     await notifyTelegram(successMsg);
-    console.log("Hoàn tất.");
+    console.log("Đã hoàn tất quy trình.");
 
   } catch (error) {
     const errorMsg = `❌ <b>LuxPower Thất bại</b>\n\n` +
