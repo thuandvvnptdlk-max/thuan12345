@@ -40,7 +40,7 @@ async function main() {
   console.log(`[${timeNow}] Bắt đầu thực hiện lệnh: ${actionText}`);
 
   try {
-    const domain = 'https://vn.luxpowertek.com';
+    const baseUrl = 'https://vn.luxpowertek.com/WManage';
 
     // 1. Đăng nhập
     const params = new URLSearchParams();
@@ -48,7 +48,7 @@ async function main() {
     params.append('password', password.trim());
 
     console.log("Đang đăng nhập hệ thống...");
-    const loginRes = await axios.post(`${domain}/WManage/api/login`, params.toString(), {
+    const loginRes = await axios.post(`${baseUrl}/api/login`, params.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -62,27 +62,28 @@ async function main() {
 
     const cookies = loginRes.headers['set-cookie'];
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
-    console.log("Đăng nhập thành công, cookie nhận được.");
+    console.log("Đăng nhập thành công!");
 
-    // 2. Thử các endpoint điều khiển
+    // 2. Gửi lệnh điều khiển theo các endpoint chính của LuxPower
     const isEnable = action.toLowerCase() === 'enable';
-    const setParams = new URLSearchParams();
-    setParams.append('serialNum', dongleSn.trim());
-    setParams.append('hold', isEnable ? '1' : '0');
-
-    const controlEndpoints = [
-      `${domain}/WManage/api/inverter/set/common`,
-      `${domain}/WManage/api/inverter/setCommon`,
-      `${domain}/WManage/api/inverter/set/quick`,
-      `${domain}/WManage/api/inverter/set/func`
+    const setEndpoints = [
+      `${baseUrl}/api/setCommon`,
+      `${baseUrl}/api/inverter/setCommon`,
+      `${baseUrl}/api/inverter/set/quick`
     ];
 
-    let successRes = null;
-    let lastErr = '';
+    let success = false;
+    let lastResponse = null;
 
-    for (const ep of controlEndpoints) {
+    for (const ep of setEndpoints) {
       try {
-        console.log(`Thử gửi lệnh tới: ${ep}`);
+        console.log(`Đang gửi lệnh tới: ${ep}`);
+        
+        const setParams = new URLSearchParams();
+        setParams.append('serialNum', dongleSn.trim());
+        setParams.append('hold', isEnable ? '1' : '0');
+        setParams.append('remoteType', '1');
+
         const res = await axios.post(ep, setParams.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -93,29 +94,29 @@ async function main() {
         });
 
         if (res.data && (res.data.success || res.data.msgCode === 200 || res.data.code === 200)) {
-          successRes = res.data;
-          console.log(`Gửi lệnh thành công tại: ${ep}`);
+          success = true;
+          lastResponse = res.data;
           break;
         } else {
-          lastErr = JSON.stringify(res.data);
+          lastResponse = res.data;
         }
-      } catch (err) {
-        lastErr = `${ep} -> HTTP ${err.response ? err.response.status : err.message}`;
+      } catch (e) {
+        lastResponse = `${ep} -> HTTP ${e.response ? e.response.status : e.message}`;
       }
     }
 
-    if (!successRes) {
-      throw new Error(`Không gửi được lệnh qua các endpoint: ${lastErr}`);
+    if (!success) {
+      throw new Error(`Máy chủ không phản hồi thành công: ${JSON.stringify(lastResponse)}`);
     }
 
-    // 3. Gửi thông báo thành công
+    // 3. Báo cáo thành công
     const successMsg = `☀️ LuxPower Thông Báo\n\n` +
                        `⏰ Thời gian: ${timeNow}\n` +
                        `⚙️ Lệnh: Đã ${actionText} biến tần thành công!\n` +
                        `📟 Thiết bị: ${dongleSn.trim()}`;
 
     await notifyTelegram(successMsg);
-    console.log("Quy trình hoàn tất thành công 100%.");
+    console.log("Hoàn tất thành công.");
 
   } catch (error) {
     const errorMsg = `❌ LuxPower Thất bại\n\n` +
