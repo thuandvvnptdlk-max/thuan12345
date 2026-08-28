@@ -11,8 +11,6 @@ const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
 
 const BASE_URL = 'https://vn.luxpowertek.com';
-const LOGIN_URL = `${BASE_URL}/WManage/web/login/login`;
-const CONTROL_URL = `${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`;
 
 if (!action) {
   if (cron === "0 1 * * *") {
@@ -51,16 +49,15 @@ async function main() {
   }
 
   try {
-    // 1. Đăng nhập theo đúng API Extension
+    // 1. Đăng nhập qua API cổng chuẩn (trả về mã 200 thành công)
     console.log("Đang đăng nhập hệ thống LuxPower VN...");
     const loginParams = new URLSearchParams();
     loginParams.append('account', username.trim());
     loginParams.append('password', password.trim());
 
-    const loginRes = await axios.post(LOGIN_URL, loginParams.toString(), {
+    const loginRes = await axios.post(`${BASE_URL}/WManage/api/login`, loginParams.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       },
       timeout: 15000
@@ -72,9 +69,10 @@ async function main() {
 
     const cookies = loginRes.headers['set-cookie'];
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
-    console.log("Đăng nhập thành công!");
+    console.log("Đăng nhập thành công, đã nhận session cookie.");
 
-    // 2. Gửi lệnh điều khiển chuẩn xác theo Extension
+    // 2. Gửi lệnh điều khiển Function Control theo đúng Extension
+    const controlUrl = `${BASE_URL}/WManage/web/maintain/remoteSet/functionControl`;
     const controlParams = new URLSearchParams();
     controlParams.append('inverterSn', dongleSn.trim());
     controlParams.append('functionParam', 'FUNC_TAKE_LOAD_TOGETHER');
@@ -84,7 +82,7 @@ async function main() {
 
     console.log(`Đang gửi lệnh ${actionText} tới Inverter ${dongleSn.trim()}...`);
 
-    const controlRes = await axios.post(CONTROL_URL, controlParams.toString(), {
+    const controlRes = await axios.post(controlUrl, controlParams.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest',
@@ -108,7 +106,7 @@ async function main() {
                        `📟 Thiết bị: ${dongleSn.trim()}`;
 
     await notifyTelegram(successMsg);
-    console.log("Hoàn tất thành công.");
+    console.log("Hoàn tất thành công 100%.");
 
   } catch (error) {
     const errorMsg = `❌ LuxPower Thất bại\n\n` +
