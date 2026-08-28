@@ -11,12 +11,15 @@ const cron = process.env.CRON_TRIGGER;
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
 
+// Địa chỉ máy chủ LuxPower Việt Nam
+const BASE_URL = 'https://vn.luxpowertek.com';
+
 // 2. Tự động xác định hành động nếu chạy theo lịch Cron
 if (!action) {
   if (cron === "0 1 * * *") {
-    action = "disable"; // 08:00 VN -> Tắt
+    action = "disable";
   } else if (cron === "24 4 * * *") {
-    action = "enable";  // 11:24 VN -> Bật
+    action = "enable";
   } else {
     action = "enable";
   }
@@ -51,10 +54,10 @@ async function main() {
   }
 
   try {
-    // Bước 1: Đăng nhập vào LuxPower API
-    console.log("Đang đăng nhập hệ thống LuxPower...");
+    // Bước 1: Đăng nhập vào Server Việt Nam
+    console.log("Đang đăng nhập hệ thống LuxPower (Server VN)...");
     const loginRes = await axios.post(
-      'https://server.luxpowertek.com/WManage/api/login',
+      `${BASE_URL}/WManage/api/login`,
       `account=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -70,7 +73,6 @@ async function main() {
     const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
 
     // Bước 2: Chuẩn bị tham số cài đặt
-    // enable (Bật): function = 1 (hoặc giá trị bật tương ứng), disable (Tắt): function = 0
     const isEnable = action.toLowerCase() === 'enable';
     const params = new URLSearchParams();
     params.append('serialNum', dongleSn);
@@ -80,7 +82,7 @@ async function main() {
 
     // Bước 3: Gửi lệnh thay đổi chế độ
     const setRes = await axios.post(
-      'https://server.luxpowertek.com/WManage/api/inverter/set/common',
+      `${BASE_URL}/WManage/api/inverter/set/common`,
       params.toString(),
       {
         headers: {
@@ -95,7 +97,7 @@ async function main() {
     // Bước 4: Gửi thông báo thành công về Telegram
     const successMsg = `☀️ <b>LuxPower Thông Báo</b>\n\n` +
                        `⏰ <b>Thời gian:</b> ${timeNow}\n` +
-                       `⚙️ <b>Lệnh:</b> Đã ${actionText} biến tần thành công!\n` +
+                       `⚙️ <b>Lệnh:</b> Đã <b>${actionText}</b> biến tần thành công!\n` +
                        `📟 <b>Thiết bị:</b> <code>${dongleSn}</code>`;
     
     await notifyTelegram(successMsg);
