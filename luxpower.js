@@ -1,6 +1,5 @@
 const axios = require('axios');
 
-// 1. Cấu hình biến môi trường
 const username = process.env.LUX_USER;
 const password = process.env.LUX_PASSWORD;
 const dongleSn = process.env.LUX_DONGLE;
@@ -10,8 +9,6 @@ const cron = process.env.CRON_TRIGGER;
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatId = process.env.TELEGRAM_CHAT_ID;
-
-const BASE_URL = 'https://vn.luxpowertek.com/WManage';
 
 if (!action) {
   if (cron === "0 1 * * *") {
@@ -33,8 +30,29 @@ async function notifyTelegram(message) {
       parse_mode: 'HTML'
     });
   } catch (err) {
-    console.error("Lỗi khi gửi thông báo Telegram:", err.message);
+    console.error("Lỗi Telegram:", err.message);
   }
+}
+
+async function tryLogin(baseUrl) {
+  const loginParams = new URLSearchParams();
+  loginParams.append('account', username.trim());
+  loginParams.append('password', password.trim());
+
+  const res = await axios.post(`${baseUrl}/WManage/api/login`, loginParams.toString(), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    },
+    timeout: 15000
+  });
+
+  if (res.data && res.data.success) {
+    const cookies = res.headers['set-cookie'];
+    const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+    return { success: true, cookieHeader, baseUrl };
+  }
+  return { success: false, data: res.data };
 }
 
 async function main() {
@@ -44,88 +62,65 @@ async function main() {
   console.log(`[${timeNow}] Bắt đầu thực hiện lệnh: ${actionText}`);
 
   if (!username || !password || !dongleSn) {
-    const errText = `❌ <b>LuxPower Thất bại</b>\nThiếu biến môi trường (LUX_USER, LUX_PASSWORD hoặc LUX_DONGLE).`;
-    await notifyTelegram(errText);
+    await notifyTelegram(`❌ <b>LuxPower Thất bại</b>\nThiếu biến môi trường LUX_USER / LUX_PASSWORD / LUX_DONGLE.`);
     process.exit(1);
   }
 
   try {
-    // Bước 1: Đăng nhập vào Server VN
-    console.log("Đang đăng nhập hệ thống LuxPower...");
-    
-    // Tạo form data chuẩn cho web login
-    const loginParams = new URLSearchParams();
-    loginParams.append('account', username.trim());
-    loginParams.append('password', password.trim());
+    const servers = ['https://server.luxpowertek.com', 'https://vn.luxpowertek.com'];
+    let loginData = null;
+    let lastError = '';
 
-    // Thử endpoint web/login trước, nếu lỗi fallback sang api/login
-    let loginRes;
-    try {
-      loginRes = await axios.post(`${BASE_URL}/web/login`, loginParams.toString(), {
-        headers: { 
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    for (const srv of servers) {
+      try {
+        console.log(`Thử đăng nhập vào: ${srv}...`);
+        const res = await tryLogin(srv);
+        if (res.success) {
+          loginData = res;
+          break;
+        } else {
+          lastError = JSON.stringify(res.data);
         }
-      });
-    } catch (e) {
-      if (e.response && e.response.status === 404) {
-        loginRes = await axios.post(`${BASE_URL}/api/login`, loginParams.toString(), {
-          headers: { 
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-          }
-        });
-      } else {
-        throw e;
+      } catch (err) {
+        lastError = err.message;
       }
     }
 
-    if (!loginRes.data || !loginRes.data.success) {
-      throw new Error(`Đăng nhập thất bại: ${JSON.stringify(loginRes.data)}`);
+    if (!loginData) {
+      throw new Error(`Đăng nhập không thành công trên các máy chủ: ${lastError}`);
     }
 
-    const cookies = loginRes.headers['set-cookie'];
-    const cookieHeader = cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
-
-    // Bước 2: Chuẩn bị tham số cài đặt (Bật/Tắt biến tần)
+    // Gửi lệnh Bật / Tắt
     const isEnable = action.toLowerCase() === 'enable';
     const setParams = new URLSearchParams();
     setParams.append('serialNum', dongleSn.trim());
     setParams.append('hold', isEnable ? '1' : '0');
 
-    console.log(`Đang gửi lệnh ${actionText} tới Inverter ${dongleSn}...`);
-
-    // Bước 3: Gửi lệnh thay đổi chế độ
     const setRes = await axios.post(
-      `${BASE_URL}/api/inverter/set/common`,
+      `${loginData.baseUrl}/WManage/api/inverter/set/common`,
       setParams.toString(),
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie': cookieHeader,
+          'Cookie': loginData.cookieHeader,
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        }
+        },
+        timeout: 15000
       }
     );
 
-    console.log("Phản hồi từ LuxPower:", setRes.data);
-
-    // Bước 4: Thông báo thành công về Telegram
     const successMsg = `☀️ <b>LuxPower Thông Báo</b>\n\n` +
                        `⏰ <b>Thời gian:</b> ${timeNow}\n` +
                        `⚙️ <b>Lệnh:</b> Đã <b>${actionText}</b> biến tần thành công!\n` +
-                       `📟 <b>Thiết bị:</b> <code>${dongleSn}</code>`;
+                       `📟 <b>Thiết bị:</b> <code>${dongleSn.trim()}</code>`;
     
     await notifyTelegram(successMsg);
-    console.log("Đã hoàn tất quy trình.");
 
   } catch (error) {
-    const errorDetail = error.response ? `${error.message} (${JSON.stringify(error.response.data)})` : error.message;
     const errorMsg = `❌ <b>LuxPower Thất bại</b>\n\n` +
                      `⏰ <b>Thời gian:</b> ${timeNow}\n` +
                      `⚙️ <b>Lệnh:</b> ${actionText}\n` +
-                     `⚠️ <b>Lỗi:</b> ${errorDetail}`;
-    console.error(errorMsg);
+                     `⚠️ <b>Chi tiết:</b> ${error.message}`;
     await notifyTelegram(errorMsg);
     process.exit(1);
   }
